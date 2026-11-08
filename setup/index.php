@@ -183,7 +183,7 @@ if ($action === 'install') {
 
 [$dbOk, $dbMsg] = db_try();
 $mailHost = (string)env('SMTP_HOST', '');
-$mailPort = (int)env('SMTP_PORT', 465);
+$mailPort = env_int('SMTP_PORT', 465);
 $net = [];
 if ($mailHost !== '') {
     $net[] = ["Reach SMTP server $mailHost:$mailPort", net_try($mailHost, $mailPort), 'Ask Dorahost to open the port, or use another SMTP port (465 or 587).'];
