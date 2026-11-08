@@ -11,3 +11,4 @@ require_once dirname(__DIR__) . "/includes/notification_helpers.php";
 
 require_once dirname(__DIR__) . "/mail/imap.php";
 echo json_encode(imap_poll(100)), "\n";
+cron_beat("process-incoming");

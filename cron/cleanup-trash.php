@@ -10,3 +10,4 @@ require_once dirname(__DIR__) . "/services/storage_service.php";
 require_once dirname(__DIR__) . "/includes/notification_helpers.php";
 
 echo json_encode(["purged" => sync_purge_old(), "orphans" => sync_clean_orphan_uploads(), "broadcasts" => sync_broadcasts()]), "\n";
+cron_beat("cleanup-trash");

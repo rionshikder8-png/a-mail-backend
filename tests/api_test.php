@@ -247,6 +247,23 @@ T::eq(inbound_deliver_raw($spam)["$alice@adverune.store"] ?? '', 'spam', 'spam i
 T::eq(count(http('GET', '/v1/folders/spam', null, $aTok)['json']['data'] ?? []), 1, 'spam folder holds it');
 T::eq(http('POST', '/mail/inbound.php', null, null, ['X-Inbound-Secret: wrong'])['status'], 401, 'inbound HTTP hook rejects a bad secret');
 
+T::section('cPanel pipe');
+$pipeRaw = "From: Pipe Sender <pipe@example.com>\r\nTo: $alice@adverune.store\r\nSubject: Via pipe\r\nMessage-ID: <pipe-$sfx@example.com>\r\n\r\nHello through the pipe\r\n";
+$proc = proc_open([PHP_BINARY, dirname(__DIR__) . '/mail/pipe.php'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pp, null, ['LOCAL_PART' => $alice, 'DOMAIN' => 'adverune.store'] + getenv());
+fwrite($pp[0], $pipeRaw);
+fclose($pp[0]);
+stream_get_contents($pp[1]);
+stream_get_contents($pp[2]);
+T::eq(proc_close($proc), 0, 'pipe exits 0 for a delivered message');
+T::check(in_array('Via pipe', array_column(http('GET', '/v1/emails/inbox', null, $aTok)['json']['data'] ?? [], 'subject'), true), 'piped message appears in the inbox');
+$ghostRaw = "From: x@example.com\r\nTo: nobody$sfx@adverune.store\r\nSubject: nobody\r\nMessage-ID: <ghost-$sfx@example.com>\r\n\r\nhi\r\n";
+$proc = proc_open([PHP_BINARY, dirname(__DIR__) . '/mail/pipe.php'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pp, null, ['LOCAL_PART' => "nobody$sfx", 'DOMAIN' => 'adverune.store'] + getenv());
+fwrite($pp[0], $ghostRaw);
+fclose($pp[0]);
+stream_get_contents($pp[1]);
+stream_get_contents($pp[2]);
+T::eq(proc_close($proc), 67, 'pipe rejects unknown mailboxes (exit 67) so the sender is told');
+
 T::section('rate limiting');
 $hit = false;
 for ($i = 0; $i < 14; $i++) {

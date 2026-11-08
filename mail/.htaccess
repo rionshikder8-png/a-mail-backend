@@ -1,0 +1,14 @@
+# Only the secret-protected inbound hook may be requested over HTTP.
+<IfModule mod_authz_core.c>
+  Require all denied
+  <Files "inbound.php">
+    Require all granted
+  </Files>
+</IfModule>
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Deny from all
+  <Files "inbound.php">
+    Allow from all
+  </Files>
+</IfModule>

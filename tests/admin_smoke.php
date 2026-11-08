@@ -75,6 +75,17 @@ T::section('POST actions need CSRF');
 $r = fetch('POST', '/admin/settings.php', ['registration_open' => '1'], $jar);
 T::eq($r['status'], 419, 'settings change without CSRF is refused');
 
+T::section('system health: cron heartbeat and SMTP test');
+$r = fetch('GET', '/admin/system-health.php', [], $jar);
+T::check(str_contains($r['body'], 'Scheduled jobs (cron)') && str_contains($r['body'], 'process-outgoing'), 'cron heartbeat table is shown');
+T::check(str_contains($r['body'], 'Test SMTP login'), 'SMTP test button is shown');
+preg_match('/name="_csrf" value="([a-f0-9]+)"/', $r['body'], $cm);
+$r = fetch('POST', '/admin/system-health.php', ['action' => 'smtptest', '_csrf' => $cm[1] ?? ''], $jar);
+T::eq($r['status'], 302, 'SMTP test submits and redirects');
+$r = fetch('GET', '/admin/system-health.php', [], $jar);
+T::check(str_contains($r['body'], 'SMTP_HOST is empty') || str_contains($r['body'], 'Mail sending'), 'SMTP test reports an honest result when no server is configured');
+T::eq(fetch('POST', '/admin/system-health.php', ['action' => 'smtptest'], $jar)['status'], 419, 'SMTP test without CSRF is refused');
+
 T::section('sign out');
 $r = fetch('GET', '/admin/logout.php', [], $jar);
 T::eq($r['status'], 302, 'logout redirects');

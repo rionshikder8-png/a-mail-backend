@@ -51,6 +51,7 @@ jobs:
                    database/schema.sql database/seed.sql mail/smtp.php mail/imap.php mail/inbound.php mail/outbound.php mail/delivery.php mail/bounce.php mail/spam-filter.php mail/domain-authentication.php mail/mail-parser.php \
                    services/email_service.php services/user_service.php services/auth_service.php services/attachment_service.php services/notification_service.php services/storage_service.php services/search_service.php services/sync_service.php \
                    cron/scheduled-emails.php cron/process-incoming.php cron/process-outgoing.php cron/process-bounces.php cron/cleanup-trash.php cron/cleanup-tokens.php cron/storage-check.php cron/system-health.php \
+                   setup/index.php mail/pipe.php mail/selftest.php tests/setup_test.php \
                    .env.example README.md; do
             [ -e "$p" ] || { echo "MISSING: $p"; missing=1; }
           done
@@ -118,6 +119,14 @@ jobs:
         run: |
           php database/create-admin.php ci-admin@example.com "CI Admin" super_admin
           php tests/admin_smoke.php http://127.0.0.1:8080 ci-admin@example.com 'CiAdminPassw0rd!'
+
+      - name: Setup wizard is closed unless the token is supplied
+        env:
+          SETUP_TOKEN: ci-only-setup-token-0123456789abcdef
+        run: |
+          php -S 127.0.0.1:8081 tests/router.php > setup-server.log 2>&1 &
+          for i in $(seq 1 20); do curl -s http://127.0.0.1:8081/v1/health >/dev/null && break; sleep 1; done
+          php tests/setup_test.php http://127.0.0.1:8081 "$SETUP_TOKEN"
 
       - name: Server log (on failure)
         if: failure()

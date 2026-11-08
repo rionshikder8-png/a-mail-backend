@@ -30,17 +30,15 @@ final class SmtpClient
                 $this->cmd('EHLO ' . $this->ehloName(), [250]);
             }
             if ($this->cfg['user'] !== '') {
-                $this->cmd('AUTH LOGIN', [334]);
-                $this->cmd(base64_encode($this->cfg['user']), [334]);
-                $this->cmd(base64_encode($this->cfg['pass']), [235]);
+                $this->authenticate();
             }
-            $this->cmd('MAIL FROM:<' . $this->clean($mailFrom) . '>', [250]);
+            $this->step('MAIL FROM:<' . $this->clean($mailFrom) . '>', [250], 'The server rejected the sender address ' . $this->clean($mailFrom));
             foreach ($rcpts as $r) {
-                $this->cmd('RCPT TO:<' . $this->clean($r) . '>', [250, 251]);
+                $this->step('RCPT TO:<' . $this->clean($r) . '>', [250, 251], 'The server rejected the recipient ' . $this->clean($r));
             }
-            $this->cmd('DATA', [354]);
+            $this->step('DATA', [354], 'The server refused to accept message data');
             $this->write($this->dotStuff($rawMessage) . "\r\n.\r\n");
-            $this->expect([250]);
+            $this->expect([250], 'The server did not accept the message');
             $code = substr($this->lastReply, 0, 3);
             $this->quit();
             return ['ok' => true, 'code' => $code, 'response' => trim($this->lastReply)];
@@ -70,6 +68,35 @@ final class SmtpClient
         $this->expect($okCodes);
     }
 
+    /** Like cmd() but with a human-readable failure reason (the server's own reply is appended by send()). */
+    private function step(string $line, array $okCodes, string $why): void
+    {
+        $this->write($line . "\r\n");
+        $this->expect($okCodes, $why);
+    }
+
+    /** AUTH PLAIN first (one round trip), AUTH LOGIN as a fallback; password is never logged. */
+    private function authenticate(): void
+    {
+        $user = (string)$this->cfg['user'];
+        $pass = (string)$this->cfg['pass'];
+        $this->write('AUTH PLAIN ' . base64_encode("\0$user\0$pass") . "\r\n");
+        try {
+            $this->expect([235], 'Login to the mail server failed. Check SMTP_USER and SMTP_PASS');
+            return;
+        } catch (RuntimeException $e) {
+            if (!str_starts_with(trim($this->lastReply), '5') && !str_starts_with(trim($this->lastReply), '4')) {
+                throw $e;
+            }
+            if (str_starts_with(trim($this->lastReply), '535')) {
+                throw $e; // credentials are wrong, no point trying LOGIN
+            }
+        }
+        $this->cmd('AUTH LOGIN', [334]);
+        $this->cmd(base64_encode($user), [334]);
+        $this->step(base64_encode($pass), [235], 'Login to the mail server failed. Check SMTP_USER and SMTP_PASS');
+    }
+
     private function write(string $data): void
     {
         if (@fwrite($this->fp, $data) === false) {
@@ -77,7 +104,7 @@ final class SmtpClient
         }
     }
 
-    private function expect(array $okCodes): void
+    private function expect(array $okCodes, string $why = 'SMTP error'): void
     {
         $reply = '';
         while (($line = fgets($this->fp, 1024)) !== false) {
@@ -89,7 +116,7 @@ final class SmtpClient
         $this->lastReply = $reply;
         $code = (int)substr($reply, 0, 3);
         if (!in_array($code, $okCodes, true)) {
-            throw new RuntimeException('SMTP error');
+            throw new RuntimeException($why);
         }
     }
 

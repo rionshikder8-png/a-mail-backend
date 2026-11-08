@@ -14,6 +14,11 @@ if (preg_match('#^/v1/([a-z]+/[a-z\-]+)/?$#', $path, $m)) {
     require $root . '/api/index.php';
     return true;
 }
+if ($path === '/setup/' || $path === '/setup' || $path === '/setup/index.php') {
+    chdir($root . '/setup');
+    require $root . '/setup/index.php';
+    return true;
+}
 if ($path === '/mail/inbound.php') {
     require $root . '/mail/inbound.php';
     return true;

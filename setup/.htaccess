@@ -1,0 +1,2 @@
+# The wizard is only reachable while it is unlocked. After setup it deletes its own entry point.
+Options -Indexes

@@ -13,3 +13,4 @@ require_once dirname(__DIR__) . "/services/health_service.php";
 $h = system_health();
 set_setting("last_health_check", json_encode($h));
 echo json_encode($h), "\n";
+cron_beat("system-health");

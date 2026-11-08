@@ -15,3 +15,4 @@ $c = q("DELETE FROM otp_codes WHERE expires_at < (UTC_TIMESTAMP() - INTERVAL 1 D
 $d = q("DELETE FROM rate_limits WHERE window_start < UNIX_TIMESTAMP() - 86400")->rowCount();
 $e = q("DELETE FROM login_history WHERE created_at < (UTC_TIMESTAMP() - INTERVAL 180 DAY)")->rowCount();
 echo json_encode(["refresh_tokens" => $a, "sessions" => $b, "otp" => $c, "rate_limits" => $d, "login_history" => $e]), "\n";
+cron_beat("cleanup-tokens");

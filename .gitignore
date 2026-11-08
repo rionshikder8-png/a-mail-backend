@@ -5,6 +5,8 @@
 *.key
 vendor/*
 !vendor/.gitkeep
+!vendor/.htaccess
+!storage/.htaccess
 storage/attachments/*
 storage/avatars/*
 storage/temporary/*
@@ -13,3 +15,6 @@ storage/backups/*
 !storage/*/.gitkeep
 .DS_Store
 *.log
+
+setup/.lock
+setup/.token

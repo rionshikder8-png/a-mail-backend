@@ -22,3 +22,4 @@ foreach (q_all("SELECT id FROM users WHERE status = \"active\"") as $u) {
     $n++;
 }
 echo json_encode(["users_checked" => $n]), "\n";
+cron_beat("storage-check");

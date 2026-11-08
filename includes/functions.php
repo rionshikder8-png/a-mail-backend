@@ -120,3 +120,14 @@ function format_bytes(int|float $b): string
     }
     return round($b / 1073741824, 2) . ' GB';
 }
+
+
+/** Record that a cron job ran, so the admin System Health page can show whether scheduling works at all. */
+function cron_beat(string $job): void
+{
+    try {
+        set_setting('cron_last_' . preg_replace('/[^a-z\-]/', '', $job), gmdate('Y-m-d H:i:s'));
+    } catch (Throwable $e) {
+        // heartbeat must never break the job itself
+    }
+}

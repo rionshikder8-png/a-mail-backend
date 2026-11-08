@@ -3,7 +3,7 @@
 **A-Mail by Adverune: REST API and administration console.**
 Plain PHP 8.1+ and MySQL 8. No frameworks, no Node.js. Companion to [`a-mail-app`](https://github.com/rionshikder8-png/a-mail-app).
 
-> **Scope note.** The brief asked for an official website as well; the owner later removed it. This repository therefore contains the **API** (`/v1/*`) and the **admin console** (`/admin/*`) only. The `website/` folder, `robots.txt`, `sitemap.xml` and `templates/website/` from the original structure are intentionally absent.
+> **Scope note.** The brief asked for an official website as well; the owner later removed it. This repository therefore contains the **API** (`/v1/*`), the **admin console** (`/admin/*`) and a one-time **setup wizard** (`/setup/`, for hosts without SSH) only. The `website/` folder, `robots.txt`, `sitemap.xml` and `templates/website/` from the original structure are intentionally absent.
 
 ## Honest status
 
@@ -20,79 +20,86 @@ Plain PHP 8.1+ and MySQL 8. No frameworks, no Node.js. Companion to [`a-mail-app
 
 Nothing in this project claims that internet email works until you have configured DNS and a relay and run the delivery test at the end of this file.
 
-## Requirements
+## Deploy on cPanel shared hosting (Dorahost)
 
-* PHP 8.1+ with `pdo_mysql`, `mbstring`, `openssl`, `fileinfo`, `curl` (`imap` optional)
-* MySQL 8.0+ or MariaDB 10.6+
-* Apache with `mod_rewrite` (or any server that can apply the rewrites in `.htaccess`)
-* HTTPS (enforced in production)
-* Cron
+Everything below uses only the cPanel web interface. No SSH needed.
 
-## Install
+### 1. Create the subdomain
+cPanel > **Domains** (or Subdomains) > create `api.adverune.store`. Note its **Document Root** (for example `/home/CPUSER/api.adverune.store`). Then cPanel > **SSL/TLS Status** > run **AutoSSL** so the subdomain has a certificate.
 
+### 2. Choose PHP 8.1 or higher
+cPanel > **Select PHP Version** > pick `8.1` (or `8.2`, `8.3`) for `api.adverune.store`. Under **Extensions** make sure these are ticked: `pdo_mysql`, `mbstring`, `openssl`, `curl`, `fileinfo`, `json`. (`imap` is optional.)
+
+### 3. Create the database
+cPanel > **MySQL Databases**:
+1. Create a database, for example `amail` (the real name will be `CPUSER_amail`).
+2. Create a user with a strong password.
+3. Add the user to the database with **ALL PRIVILEGES**.
+
+### 4. Upload the files
+cPanel > **File Manager** > open the subdomain's document root > **Upload** `a-mail-backend.zip` > right-click > **Extract**. Move the files so `index.php` sits directly in the document root.
+
+### 5. Create the `.env`
+In File Manager click **Settings** > tick **Show Hidden Files**. Copy `.env.example` to `.env` and edit it:
+* `DB_NAME`, `DB_USER`, `DB_PASS` from step 3 (`DB_HOST=localhost`)
+* `APP_KEY`, `TOKEN_PEPPER`, `SETUP_TOKEN`: three different random strings of 40+ characters
+* `SMTP_USER` / `SMTP_PASS`: a mailbox you create in cPanel > **Email Accounts**, for example `system@adverune.store`
+* `SMTP_HOST`: shown in Email Accounts > **Connect Devices**. Usually `mail.adverune.store`. Use port `465` with `SMTP_SECURITY=ssl`.
+
+Set permissions of `.env` to `600`.
+
+### 6. Run the setup wizard
+Open `https://api.adverune.store/setup/?token=YOUR_SETUP_TOKEN`. It shows what your server supports, installs the database, creates your first administrator, and tests the SMTP login. When everything is green click **Finish and lock**, then delete the `setup/` folder and remove `SETUP_TOKEN` from `.env`.
+
+### 7. Cron jobs
+cPanel > **Cron Jobs**. Use the PHP path shown for your PHP version (commonly `/usr/local/bin/php` or `/opt/cpanel/ea-php81/root/usr/bin/php`) and your home path:
+
+| Schedule | Command |
+|---|---|
+| Every minute | `/usr/local/bin/php /home/CPUSER/api.adverune.store/cron/process-outgoing.php` |
+| Every minute | `/usr/local/bin/php /home/CPUSER/api.adverune.store/cron/scheduled-emails.php` |
+| Every 10 minutes | `/usr/local/bin/php /home/CPUSER/api.adverune.store/cron/process-bounces.php` |
+| Every 15 minutes | `/usr/local/bin/php /home/CPUSER/api.adverune.store/cron/system-health.php` |
+| Hourly | `/usr/local/bin/php /home/CPUSER/api.adverune.store/cron/cleanup-tokens.php` |
+| Daily 03:23 | `/usr/local/bin/php /home/CPUSER/api.adverune.store/cron/cleanup-trash.php` |
+| Daily 03:40 | `/usr/local/bin/php /home/CPUSER/api.adverune.store/cron/storage-check.php` |
+
+If your host limits cron to every 5 minutes, use `*/5`. Outgoing mail then leaves up to 5 minutes after sending.
+
+### 8. Receive mail (pipe to the app)
+cPanel's mail server already accepts mail for `adverune.store`. Hand it to A-Mail:
+1. In File Manager set `mail/pipe.php` permissions to **755**.
+2. cPanel > **Email** > **Default Address** > choose `adverune.store` > **Pipe to a Program** and enter the path relative to your home folder, e.g. `api.adverune.store/mail/pipe.php`.
+3. Mail for any address then flows into A-Mail. Addresses with no A-Mail account are rejected back to the sender.
+
+Important: A-Mail users get their mail through A-Mail only. Do **not** also create cPanel mailboxes with the same names as A-Mail users, because a real cPanel mailbox takes priority over the catch-all and the mail would never reach the app.
+
+If your host does not allow piping, use the fallback: create one cPanel mailbox `catchall@adverune.store`, make it the Default Address, set `IMAP_*` in `.env`, enable the `imap` PHP extension, and add the cron `process-incoming.php` every minute.
+
+### 9. DNS and mail authentication
+Because DNS for `adverune.store` is at Dorahost/cPanel, the mail records usually exist already. In cPanel open **Email Deliverability** and click **Repair/Manage** until `adverune.store` shows valid **SPF** and **DKIM**. Add a DMARC record in **Zone Editor**: TXT, name `_dmarc`, value `v=DMARC1; p=none; rua=mailto:system@adverune.store` (move to `p=quarantine` once mail is flowing). Make sure the `api` A record points to your server.
+
+### 10. Prove it works
+1. `https://api.adverune.store/v1/health` shows `{"success":true,...}`.
+2. Sign in at `/admin/`.
+3. In the Flutter app: Settings > Account > **Test connection**.
+4. Register two A-Mail accounts and send between them.
+5. Send to a Gmail address and reply from Gmail. In Gmail choose **Show original** and confirm SPF, DKIM and DMARC say PASS.
+
+Until step 5 succeeds, do not tell users that external email works.
+
+### Shared-hosting limits to know about
+* Mail goes out through your host's mail server, so the host's sending limits apply (often 100 to 500 messages per hour per domain). Ask Dorahost for the exact figure.
+* The server only lets a logged-in mailbox send as itself or other addresses on the same domain. If Dorahost rejects sending as `alice@adverune.store`, ask them to allow it, or add a relay service.
+* Shared IPs can have a weaker reputation. If mail to Gmail lands in spam, an SMTP relay service (Brevo, Mailgun, Amazon SES, Resend) fixes it: only change the `SMTP_*` values.
+* Outbound port 25 is usually blocked. That is why A-Mail sends through your host's SMTP server.
+
+### Alternative: VPS with SSH
 ```bash
-git clone https://github.com/rionshikder8-png/a-mail-backend.git && cd a-mail-backend
-cp .env.example .env
-# edit .env: DB_*, APP_URL, and generate secrets:
-#   APP_KEY=$(openssl rand -hex 32)      TOKEN_PEPPER=$(openssl rand -hex 32)
-mysql -e "CREATE DATABASE amail CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-php database/install.php                       # schema + reference data (safe to re-run)
-php database/create-admin.php you@example.com "Your Name" super_admin   # asks for a password (12+ chars)
-chmod -R u+rwX storage
+cp .env.example .env && nano .env
+php database/install.php
+php database/create-admin.php you@example.com "Your Name" super_admin
 ```
-
-Point the web server's document root at the repository root and make sure `.htaccess` is honoured. Only `index.php`, `api/`, `admin/`, `assets/` and `mail/inbound.php` are reachable from the web; `config/`, `includes/`, `services/`, `cron/`, `database/`, `storage/`, `tests/` and `.env` are denied by `.htaccess`. For stronger isolation, put the document root on a `public/` copy or add the same denials in your vhost.
-
-Verify: `curl https://api.adverune.store/v1/health`, then open `/admin/` and sign in.
-
-## Cron
-
-```cron
-* * * * *    php /var/www/a-mail-backend/cron/process-outgoing.php
-* * * * *    php /var/www/a-mail-backend/cron/scheduled-emails.php
-* * * * *    php /var/www/a-mail-backend/cron/process-incoming.php      # only if you poll IMAP
-*/10 * * * * php /var/www/a-mail-backend/cron/process-bounces.php
-*/15 * * * * php /var/www/a-mail-backend/cron/system-health.php
-17 * * * *   php /var/www/a-mail-backend/cron/cleanup-tokens.php
-23 3 * * *   php /var/www/a-mail-backend/cron/cleanup-trash.php
-40 3 * * *   php /var/www/a-mail-backend/cron/storage-check.php
-```
-
-All cron scripts refuse to run over HTTP.
-
-## Mail infrastructure (what you must provide)
-
-A-Mail's PHP code accepts and sends mail through standard interfaces. It does not replace a mail server.
-
-**Outbound.** Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY` (`tls` or `ssl`), `SMTP_USER`, `SMTP_PASS` to a relay (your own Postfix, or a provider). `cron/process-outgoing.php` then delivers the queue with exponential back-off (5 min, 15 min, 1 h, 3 h, 12 h, 24 h) and records every attempt in Admin > Delivery logs.
-
-**Inbound**, choose one:
-1. *Pipe (recommended with Postfix).* Route the domain's mail to `php /path/mail/inbound.php` with a transport or virtual alias.
-2. *HTTP hook.* Have your relay POST the raw message to `/mail/inbound.php` with header `X-Inbound-Secret: <INBOUND_SECRET>`.
-3. *IMAP poll.* Set `IMAP_*` to a catch-all mailbox and run `cron/process-incoming.php` (needs `ext-imap`).
-
-**DNS for `adverune.store`** (Admin > Domains shows live pass/fail for each):
-
-| Type | Host | Value |
-|---|---|---|
-| MX | `@` | `10 mail.adverune.store.` |
-| A | `mail` | your server IP |
-| TXT (SPF) | `@` | `v=spf1 mx ip4:YOUR_IP -all` |
-| TXT (DKIM) | `amail._domainkey` | `v=DKIM1; k=rsa; p=PUBLIC_KEY` |
-| TXT (DMARC) | `_dmarc` | `v=DMARC1; p=quarantine; rua=mailto:dmarc@adverune.store` |
-| PTR | your IP | `mail.adverune.store` (set at your hosting provider) |
-
-Generate the DKIM key outside the web root:
-
-```bash
-openssl genrsa -out /etc/amail/dkim.private 2048
-openssl rsa -in /etc/amail/dkim.private -pubout -outform der | openssl base64 -A   # paste as p=
-```
-Then set `DKIM_PRIVATE_KEY_PATH=/etc/amail/dkim.private` and `DKIM_SELECTOR=amail`.
-
-**Prove it works** before telling anyone it does: register two accounts, mail yourself at an external address and back, and check the headers show `spf=pass dkim=pass dmarc=pass`.
-
-Many cloud providers block outbound port 25 and new IPs start with poor reputation. A transactional relay for outbound is the pragmatic route.
 
 ## Connecting the Flutter app
 
