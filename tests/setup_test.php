@@ -19,7 +19,11 @@ T::eq(http('POST', '/setup/', null, null, [], ['action' => 'install'])['status']
 $r = http('GET', '/setup/?token=' . urlencode($token));
 T::check($r['status'] === 200, 'correct token: wizard opens', 'HTTP ' . $r['status'] . ': ' . substr(trim(strip_tags($r['raw'])), 0, 400));
 T::check(str_contains($r['raw'], 'Server checks') && str_contains($r['raw'], 'Install database'), 'wizard shows its steps');
-T::check(!str_contains($r['raw'], (string)getenv('DB_PASS')) || getenv('DB_PASS') === '', 'wizard never prints the database password');
+// Canary secrets with unmistakable values (a short word like 'root' would appear in normal page text).
+foreach (['APP_KEY', 'TOKEN_PEPPER', 'SMTP_PASS', 'SETUP_TOKEN'] as $k) {
+    $v = (string)getenv($k);
+    T::check($v === '' || !str_contains($r['raw'], $v), "wizard never prints $k");
+}
 T::check(str_contains(strtolower($r['headers']), 'x-robots-tag: noindex'), 'wizard is marked noindex');
 T::check(str_contains(strtolower($r['headers']), 'cache-control: no-store'), 'wizard is not cached');
 T::finish();

@@ -123,6 +123,7 @@ jobs:
       - name: Setup wizard is closed unless the token is supplied
         env:
           SETUP_TOKEN: ci-only-setup-token-0123456789abcdef
+          SMTP_PASS: ci-canary-smtp-password-9f8e7d6c5b4a
         run: |
           php -S 127.0.0.1:8081 tests/router.php > setup-server.log 2>&1 &
           for i in $(seq 1 20); do curl -s http://127.0.0.1:8081/v1/health >/dev/null && break; sleep 1; done
