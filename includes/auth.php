@@ -122,16 +122,17 @@ function session_start_for(int $userId, string $deviceName, string $platform): a
 function refresh_rotate(string $presented): array
 {
     $hash = token_hash($presented);
-    return db_tx(function () use ($hash) {
+    $result = db_tx(function () use ($hash) {
         $rt = q_one('SELECT * FROM refresh_tokens WHERE token_hash = ? FOR UPDATE', [$hash]);
         if (!$rt) {
             fail('unauthorized', 'Please sign in again.', 401);
         }
         if ($rt['used_at'] !== null || $rt['revoked_at'] !== null) {
+            // Theft signal. Revoke the family and COMMIT; the 401 is sent after the transaction so the revocation is not rolled back.
             q('UPDATE refresh_tokens SET revoked_at = UTC_TIMESTAMP() WHERE family_id = ? AND revoked_at IS NULL', [$rt['family_id']]);
             q('UPDATE sessions SET revoked_at = UTC_TIMESTAMP() WHERE id = ? AND revoked_at IS NULL', [$rt['session_id']]);
             security_log((int)$rt['user_id'], 'refresh_token_reuse', 'critical', ['session' => (int)$rt['session_id']]);
-            fail('unauthorized', 'Your session has ended. Please sign in again.', 401);
+            return ['_reuse' => true];
         }
         if (strtotime($rt['expires_at'] . ' UTC') < time()) {
             fail('unauthorized', 'Your session has expired. Please sign in again.', 401);
@@ -147,6 +148,10 @@ function refresh_rotate(string $presented): array
         [$access, $exp] = access_token_issue((int)$rt['user_id'], (int)$rt['session_id']);
         return ['access_token' => $access, 'refresh_token' => $new, 'expires_in' => max(1, $exp - time()), 'token_type' => 'Bearer'];
     });
+    if (isset($result['_reuse'])) {
+        fail('unauthorized', 'Your session has ended. Please sign in again.', 401);
+    }
+    return $result;
 }
 
 function session_revoke(int $sessionId): void

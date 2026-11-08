@@ -74,8 +74,9 @@ $r = http('POST', '/v1/emails/send', ['to' => [['address' => "$bob@adverune.stor
 T::eq($r['status'], 201, 'send to local user is 201', $r['raw']);
 T::eq($r['json']['data']['status'] ?? '', 'delivered', 'status is delivered');
 $r = http('GET', '/v1/emails/inbox', null, $bTok);
-T::eq(count($r['json']['data'] ?? []), 1, 'bob has 1 inbox message');
-$m0 = $r['json']['data'][0] ?? [];
+$hello = array_values(array_filter($r['json']['data'] ?? [], fn($m) => $m['subject'] === 'Hello Bob'));
+T::eq(count($hello), 1, 'bob received the message (plus his own welcome mail)');
+$m0 = $hello[0] ?? [];
 T::eq($m0['subject'] ?? '', 'Hello Bob', 'subject delivered');
 T::eq($m0['is_read'] ?? null, false, 'new mail is unread');
 T::eq($m0['from']['address'] ?? '', "$alice@adverune.store", 'sender correct');

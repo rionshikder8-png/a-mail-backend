@@ -432,6 +432,10 @@ function email_list(int $userId, string $folderKey): never
     $join = '';
     $args = [$userId];
     if (($label = input_int('label_id', 0)) > 0) {
+        // Like Gmail, a label view spans every folder except Trash and Spam.
+        if ($folderKey === 'inbox' && input_int('snoozed', 0) !== 1) {
+            $where = FOLDER_WHERE['all'];
+        }
         // join order in SQL is: label placeholder first, then the user placeholder in WHERE
         $join = ' JOIN email_labels el ON el.email_id = e.id AND el.label_id = ? JOIN labels lb ON lb.id = el.label_id AND lb.user_id = e.user_id ';
         $args = [$label, $userId];
