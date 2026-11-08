@@ -1,0 +1,126 @@
+name: PHP CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Syntax and safety checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, pdo_mysql, curl, fileinfo, openssl
+          coverage: none
+
+      - name: PHP syntax check (every file)
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            out=$(php -l "$f" 2>&1) || { echo "$out"; fail=1; }
+          done < <(find . -name '*.php' -not -path './vendor/*')
+          [ "$fail" -eq 0 ] && echo "All PHP files parse."
+          exit $fail
+
+      - name: Repository hygiene (no secrets, no forbidden frameworks)
+        run: |
+          # secrets must never be committed
+          if git ls-files | grep -E '(^|/)\.env$|\.pem$|\.key$|id_rsa'; then echo "Secret-like file tracked"; exit 1; fi
+          if git grep -nE "(AKIA[0-9A-Z]{16}|BEGIN (RSA |EC )?PRIVATE KEY|ghp_[A-Za-z0-9]{30,}|github_pat_)" -- . ':!.github'; then echo "Secret-like string found"; exit 1; fi
+          # the spec forbids frameworks
+          if [ -f composer.json ] && grep -Eiq '"(laravel|symfony|codeigniter)/' composer.json; then echo "Forbidden framework"; exit 1; fi
+          # every SQL statement must use prepared statements: no raw concatenated user input into q()/query()
+          if git grep -nE '\$_(GET|POST|REQUEST)\[[^]]+\]\s*\.' -- 'api/*.php' 'services/*.php' 'admin/*.php' | grep -E 'SELECT|INSERT|UPDATE|DELETE'; then echo "Possible SQL injection"; exit 1; fi
+          echo "Hygiene checks passed."
+
+      - name: Required structure present
+        run: |
+          missing=0
+          for p in index.php .htaccess config/config.php config/database.php config/mail_config.php config/security.php config/storage_config.php config/constants.php \
+                   includes/functions.php includes/session.php includes/auth.php includes/csrf.php includes/validation.php includes/permissions.php includes/response.php includes/mail_helpers.php includes/notification_helpers.php includes/upload_helpers.php \
+                   api/index.php admin/index.php admin/login.php admin/dashboard.php admin/users.php admin/user-details.php admin/mailboxes.php admin/domains.php admin/mail-logs.php admin/delivery-logs.php admin/spam-management.php admin/abuse-reports.php admin/storage-management.php admin/plans.php admin/subscriptions.php admin/notifications.php admin/support.php admin/reports.php admin/security-center.php admin/system-health.php admin/settings.php admin/profile.php admin/logout.php \
+                   database/schema.sql database/seed.sql mail/smtp.php mail/imap.php mail/inbound.php mail/outbound.php mail/delivery.php mail/bounce.php mail/spam-filter.php mail/domain-authentication.php mail/mail-parser.php \
+                   services/email_service.php services/user_service.php services/auth_service.php services/attachment_service.php services/notification_service.php services/storage_service.php services/search_service.php services/sync_service.php \
+                   cron/scheduled-emails.php cron/process-incoming.php cron/process-outgoing.php cron/process-bounces.php cron/cleanup-trash.php cron/cleanup-tokens.php cron/storage-check.php cron/system-health.php \
+                   .env.example README.md; do
+            [ -e "$p" ] || { echo "MISSING: $p"; missing=1; }
+          done
+          exit $missing
+
+  test:
+    name: Unit and API tests (PHP ${{ matrix.php }} + MySQL 8)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.3']
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: amail_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'true'
+      APP_URL: http://127.0.0.1:8080
+      MAIL_DOMAIN: adverune.store
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_NAME: amail_test
+      DB_USER: root
+      DB_PASS: root
+      # throwaway values that exist only inside this ephemeral runner
+      APP_KEY: ci-only-app-key-0123456789abcdef0123456789abcdef
+      TOKEN_PEPPER: ci-only-pepper-0123456789abcdef0123456789abcdef
+      INBOUND_SECRET: ci-only-inbound-secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, pdo_mysql, curl, fileinfo, openssl
+          coverage: none
+
+      - name: Install schema
+        run: php database/install.php
+
+      - name: Unit tests
+        run: php tests/unit_test.php
+
+      - name: Start API server
+        run: |
+          mkdir -p storage/attachments storage/temporary storage/logs
+          php -S 127.0.0.1:8080 tests/router.php > server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8080/v1/health >/dev/null && break; sleep 1; done
+          curl -s http://127.0.0.1:8080/v1/health
+
+      - name: API integration tests
+        run: php tests/api_test.php http://127.0.0.1:8080
+
+      - name: Admin panel smoke test (all pages, as a logged-in admin)
+        env:
+          ADMIN_PASSWORD: CiAdminPassw0rd!
+        run: |
+          php database/create-admin.php ci-admin@example.com "CI Admin" super_admin
+          php tests/admin_smoke.php http://127.0.0.1:8080 ci-admin@example.com 'CiAdminPassw0rd!'
+
+      - name: Server log (on failure)
+        if: failure()
+        run: |
+          echo '--- php server log ---'; tail -n 80 server.log || true
+          echo '--- app log ---'; cat storage/logs/*.log 2>/dev/null | tail -n 80 || true
