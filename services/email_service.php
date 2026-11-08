@@ -105,7 +105,7 @@ function mailbox_store(int $userId, array $m): int
     q('INSERT INTO emails (user_id, thread_id, message_id, in_reply_to, references_hdr, from_name, from_address, subject, snippet, body_html, body_text,
                            folder, is_read, is_draft, size_bytes, spam_score, scheduled_at, sent_state, received_at)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-        [$userId, $threadId, mb_substr((string)$m['message_id'], 0, 255), $m['in_reply_to'] ?: null, $m['references'] ?? null,
+        [$userId, $threadId, mb_substr((string)$m['message_id'], 0, 255), ($m['in_reply_to'] ?? null) ?: null, ($m['references'] ?? null) ?: null,
          mb_substr((string)($m['from']['name'] ?? ''), 0, 190), mb_substr((string)$m['from']['address'], 0, 255),
          mb_substr((string)$m['subject'], 0, 998), $snippet, $html, $text,
          $m['folder'] ?? 'inbox', !empty($m['is_read']) ? 1 : 0, !empty($m['is_draft']) ? 1 : 0, $size, $m['spam_score'] ?? 0,

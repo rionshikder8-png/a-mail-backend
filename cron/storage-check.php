@@ -6,6 +6,7 @@ if (PHP_SAPI !== "cli") {
     exit;
 }
 require_once dirname(__DIR__) . "/services/sync_service.php";
+require_once dirname(__DIR__) . "/services/notification_service.php";
 require_once dirname(__DIR__) . "/services/storage_service.php";
 require_once dirname(__DIR__) . "/includes/notification_helpers.php";
 

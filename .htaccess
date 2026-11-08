@@ -17,7 +17,7 @@ RewriteCond %{HTTP:Authorization} .
 RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
 # Pretty API URLs: /v1/auth/login -> api/index.php?route=auth/login
-RewriteRule ^v1/?$ api/index.php?route=health [QSA,L]
+RewriteRule ^v1(/health)?/?$ api/index.php?route=health [QSA,L]
 RewriteRule ^v1/([a-z]+/[a-z\-]+)/?$ api/index.php?route=$1 [QSA,L]
 
 # Block direct hits on individual endpoint files

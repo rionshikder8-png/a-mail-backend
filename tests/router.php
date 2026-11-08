@@ -4,7 +4,7 @@ declare(strict_types=1);
 /** Router for `php -S` that mimics the .htaccess rewrites, so CI can test without Apache. */
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $root = dirname(__DIR__);
-if (preg_match('#^/v1/?$#', $path)) {
+if (preg_match('#^/v1(/health)?/?$#', $path)) {
     $_GET['route'] = 'health';
     require $root . '/api/index.php';
     return true;
