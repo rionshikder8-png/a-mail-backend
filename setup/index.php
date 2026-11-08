@@ -13,6 +13,18 @@ declare(strict_types=1);
  */
 require_once dirname(__DIR__) . '/config/config.php';
 
+set_exception_handler(static function (Throwable $e): void {
+    http_response_code(500);
+    echo '<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><body style="font-family:system-ui;max-width:640px;margin:10vh auto;padding:0 1rem"><h2>Setup hit an error</h2><p>'
+        . htmlspecialchars($e->getMessage(), ENT_QUOTES) . '</p><p style="color:#667">' . htmlspecialchars(basename($e->getFile()) . ':' . $e->getLine(), ENT_QUOTES) . '</p>';
+});
+set_error_handler(static function (int $no, string $str, string $file, int $line): bool {
+    if (!(error_reporting() & $no)) {
+        return false;
+    }
+    throw new ErrorException($str, 0, $no, $file, $line);
+});
+
 header('X-Robots-Tag: noindex, nofollow');
 header('Cache-Control: no-store');
 header("Content-Security-Policy: default-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'");

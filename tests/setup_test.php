@@ -17,7 +17,7 @@ T::check(!str_contains($r['raw'], 'Install database'), 'no token: wizard content
 T::eq(http('GET', '/setup/?token=wrong-token-value-0000000000')['status'], 403, 'wrong token: refused');
 T::eq(http('POST', '/setup/', null, null, [], ['action' => 'install'])['status'], 403, 'POST without token cannot install');
 $r = http('GET', '/setup/?token=' . urlencode($token));
-T::eq($r['status'], 200, 'correct token: wizard opens');
+T::check($r['status'] === 200, 'correct token: wizard opens', 'HTTP ' . $r['status'] . ': ' . substr(trim(strip_tags($r['raw'])), 0, 400));
 T::check(str_contains($r['raw'], 'Server checks') && str_contains($r['raw'], 'Install database'), 'wizard shows its steps');
 T::check(!str_contains($r['raw'], (string)getenv('DB_PASS')) || getenv('DB_PASS') === '', 'wizard never prints the database password');
 T::check(str_contains(strtolower($r['headers']), 'x-robots-tag: noindex'), 'wizard is marked noindex');
