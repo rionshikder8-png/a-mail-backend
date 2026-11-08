@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+vendor/*
+!vendor/.gitkeep
+storage/attachments/*
+storage/avatars/*
+storage/temporary/*
+storage/logs/*
+storage/backups/*
+!storage/*/.gitkeep
+.DS_Store
+*.log

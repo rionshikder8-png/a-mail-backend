@@ -1,0 +1,46 @@
+# A-Mail backend: only the API front controller and the admin panel are public.
+Options -Indexes -MultiViews
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+# Never serve private paths
+# the only public file under mail/ is the secret-protected inbound hook
+RewriteRule ^mail/inbound\.php$ - [L]
+RewriteRule ^(config|includes|services|mail|cron|templates|storage|database|vendor|tests|docs)(/|$) - [F,L]
+RewriteRule ^\.(env|git|github) - [F,L]
+RewriteRule \.(sql|md|log|env|ini|bak|sh|lock|json|yml|yaml)$ - [F,L]
+
+# Pass Authorization header through to PHP (needed by some CGI/FastCGI setups)
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Pretty API URLs: /v1/auth/login -> api/index.php?route=auth/login
+RewriteRule ^v1/?$ api/index.php?route=health [QSA,L]
+RewriteRule ^v1/([a-z]+/[a-z\-]+)/?$ api/index.php?route=$1 [QSA,L]
+
+# Block direct hits on individual endpoint files
+RewriteCond %{THE_REQUEST} \s/api/(?!index\.php)[a-z]+/ [NC]
+RewriteRule ^api/ - [F,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+Header always set X-Content-Type-Options "nosniff"
+Header always set X-Frame-Options "DENY"
+Header always set Referrer-Policy "no-referrer"
+</IfModule>
+
+<FilesMatch "^\.">
+Require all denied
+</FilesMatch>
+
+# php_flag only works under mod_php; on PHP-FPM/CGI it would cause a 500, so guard it.
+<IfModule mod_php.c>
+php_flag display_errors off
+php_flag expose_php off
+</IfModule>
+<IfModule mod_php8.c>
+php_flag display_errors off
+php_flag expose_php off
+</IfModule>
