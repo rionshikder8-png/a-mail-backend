@@ -1,0 +1,22 @@
+/* A-Mail shared tokens (mirrors the Flutter app's brand palette) */
+:root{
+  --blue:#1F6BFF; --blue-600:#1858d6; --violet:#7C3AED; --orange:#FF7A1A; --red:#E5483B;
+  --ink:#0F1B3D;
+  --bg:#F5F7FB; --surface:#FFFFFF; --surface-2:#EBEFF7; --outline:#E1E6F0;
+  --text:#111A33; --muted:#5E6985;
+  --ok:#1E9E63; --warn:#E08A00; --danger:#D93A32;
+  --radius:12px; --radius-sm:8px;
+  --shadow:0 1px 2px rgba(15,27,61,.06),0 4px 16px rgba(15,27,61,.05);
+  --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0B1020;--surface:#121933;--surface-2:#1B2447;--outline:#273157;--text:#E9EDFA;--muted:#9AA5C8;--shadow:0 1px 2px rgba(0,0,0,.4)}
+}
+:root[data-theme="light"]{--bg:#F5F7FB;--surface:#FFFFFF;--surface-2:#EBEFF7;--outline:#E1E6F0;--text:#111A33;--muted:#5E6985}
+:root[data-theme="dark"]{--bg:#0B1020;--surface:#121933;--surface-2:#1B2447;--outline:#273157;--text:#E9EDFA;--muted:#9AA5C8}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3{margin:0;line-height:1.25}
+.muted{color:var(--muted)}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
