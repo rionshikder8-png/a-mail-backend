@@ -251,7 +251,11 @@ function email_dispatch(int $sentEmailId): array
     $atts = q_all('SELECT * FROM attachments WHERE email_id = ?', [$sentEmailId]);
     $local = $external = [];
     foreach ($rcpts as $r) {
-        (is_local_address($r['address']) ? $local : $external)[] = $r;
+        if (is_local_address($r['address'])) {
+            $local[] = $r;
+        } else {
+            $external[] = $r;
+        }
     }
 
     $deliveredLocal = 0;
